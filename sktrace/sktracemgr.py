@@ -44,7 +44,8 @@ class Inst:
 
     def cal_regs_change(self, pre_ctx, ctx):
         print_every_change = True
-        eveny_change_str = None
+        every_change_str = None
+        is_change = False
         # ignore pc
         if not pre_ctx:
             for i in range(31):
@@ -55,20 +56,23 @@ class Inst:
                     self.changed_regs_dict["sp"] = []
                     self.changed_regs_dict["sp"].append(ctx.sp)
                     if print_every_change:
-                        eveny_change_str = ("{}\t; sp={}->{}".format(self.simple_str(), pre_ctx.sp, ctx.sp))
+                        every_change_str = ("{}\t; sp={}->{}".format(self.simple_str(), pre_ctx.sp, ctx.sp))
             for i in range(31):
                 if pre_ctx.general_regs[i] != ctx.general_regs[i]:
+                    is_change = True
                     if "x"+str(i) not in self.changed_regs_dict:
                         self.changed_regs_dict["x"+str(i)] = []
                     self.changed_regs_dict["x"+str(i)].append(ctx.general_regs[i])
                     if print_every_change:
-                        if eveny_change_str:
-                            eveny_change_str += (", x{}={}->{}".format(str(i), pre_ctx.general_regs[i], ctx.general_regs[i]))
+                        if every_change_str:
+                            every_change_str += (", x{}={}->{}".format(str(i), pre_ctx.general_regs[i], ctx.general_regs[i]))
                         else:
-                            eveny_change_str = ("{}\t; x{}={}->{}".format(self.simple_str(), str(i), pre_ctx.general_regs[i], ctx.general_regs[i]))
+                            every_change_str = ("{}\t; x{}={}->{}".format(self.simple_str(), str(i), pre_ctx.general_regs[i], ctx.general_regs[i]))
+            if not is_change:
+                every_change_str = ("{}\t;".format(self.simple_str()))
 
-        if print_every_change and eveny_change_str:
-            print(eveny_change_str)
+        if print_every_change and every_change_str:
+            print(every_change_str)
         pass
 
     def try_strings(self):
