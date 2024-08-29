@@ -297,7 +297,6 @@ function start(libname, payload) {
             } else if ("offset" in payload) {
                 targetAddress = targetModule.base.add(ptr(payload.offset));
             }
-            myCode()
             traceAddr(targetAddress)
         }
     })
