@@ -11,4 +11,10 @@ https://bbs.pediy.com/thread-264680.htm
 2. 改为 C 实现
 
 
+## 用法
+1. attach
+```python sktrace.py -m attach -l {soName} -i {funcAddr | funcExportName} {appName} > trace.log```
+2. spawn
+```python sktrace.py -m spawn -l {soName} -i {funcAddr | funcExportName} {packageName} > trace.log```
+
 

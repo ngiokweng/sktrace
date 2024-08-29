@@ -94,7 +94,7 @@ on_arm64_after(GumCpuContext *cpu_context,
         const message = messagePtr.readUtf8String();
         console.log(message)
         // send(message)
-      }, 'void', ['pointer']),
+    }, 'void', ['pointer']),
 });
 
 
@@ -105,7 +105,7 @@ function stalkerTraceRangeC(tid, base, size) {
     userData.writePointer(base)
     const pointerSize = Process.pointerSize;
     userData.add(pointerSize).writePointer(base.add(size))
-    
+
     Stalker.follow(tid, {
         transform: arm64CM.transform,
         // onEvent: cm.process,
@@ -119,7 +119,7 @@ function stalkerTraceRange(tid, base, size) {
         transform: (iterator) => {
             const instruction = iterator.next();
             const startAddress = instruction.address;
-            const isModuleCode = startAddress.compare(base) >= 0 && 
+            const isModuleCode = startAddress.compare(base) >= 0 &&
                 startAddress.compare(base.add(size)) < 0;
             // const isModuleCode = true;
             do {
@@ -132,11 +132,11 @@ function stalkerTraceRange(tid, base, size) {
                         val: JSON.stringify(instruction)
                     })
                     iterator.putCallout((context) => {
-                            send({
-                                type: 'ctx',
-                                tid: tid,
-                                val: JSON.stringify(context)
-                            })
+                        send({
+                            type: 'ctx',
+                            tid: tid,
+                            val: JSON.stringify(context)
+                        })
                     })
                 }
             } while (iterator.next() !== null);
@@ -146,7 +146,7 @@ function stalkerTraceRange(tid, base, size) {
 
 
 function traceAddr(addr) {
-    let moduleMap = new ModuleMap();    
+    let moduleMap = new ModuleMap();
     let targetModule = moduleMap.find(addr);
     console.log(JSON.stringify(targetModule))
     let exports = targetModule.enumerateExports();
@@ -157,16 +157,16 @@ function traceAddr(addr) {
     // })
     // send({
     //     type: "sym",
-    
+
 
     // })
     Interceptor.attach(addr, {
-        onEnter: function(args) {
+        onEnter: function (args) {
             this.tid = Process.getCurrentThreadId()
             // stalkerTraceRangeC(this.tid, targetModule.base, targetModule.size)
             stalkerTraceRange(this.tid, targetModule.base, targetModule.size)
         },
-        onLeave: function(ret) {
+        onLeave: function (ret) {
             Stalker.unfollow(this.tid);
             Stalker.garbageCollect()
             send({
@@ -195,7 +195,7 @@ function watcherLib(libname, callback) {
         Interceptor.replace(dlopen, new NativeCallback((filename, mode) => {
             const path = filename.readCString();
             const retval = dlopen(filename, mode);
-    
+
             if (path !== null) {
                 if (checkLibrary(path)) {
                     // eslint-disable-next-line @typescript-eslint/no-base-to-string
@@ -212,6 +212,69 @@ function watcherLib(libname, callback) {
 }
 
 
+function hook_dlopen(soName, payload) {
+    Interceptor.attach(Module.findExportByName(null, "dlopen"),
+        {
+            onEnter: function (args) {
+                var pathptr = args[0];
+                if (pathptr !== undefined && pathptr != null) {
+                    var path = ptr(pathptr).readCString();
+                    if (path.indexOf(soName) >= 0) {
+                        this.is_can_hook = true;
+                    }
+                }
+            },
+            onLeave: function (retval) {
+                if (this.is_can_hook) {
+                    console.log("hook start...");
+                    hook_func(soName, payload)
+                }
+            }
+        }
+    );
+
+    Interceptor.attach(Module.findExportByName(null, "android_dlopen_ext"),
+        {
+            onEnter: function (args) {
+                var pathptr = args[0];
+                if (pathptr !== undefined && pathptr != null) {
+                    var path = ptr(pathptr).readCString();
+                    if (path.indexOf(soName) >= 0) {
+                        this.is_can_hook = true;
+                    }
+                }
+            },
+            onLeave: function (retval) {
+                if (this.is_can_hook) {
+                    console.log("hook start...");
+                    hook_func(soName, payload)
+                }
+            }
+        }
+    );
+}
+
+
+function hook_func(soName, payload) {
+    var base = Module.findBaseAddress(soName);
+
+    // add your code here...
+
+    start(soName, payload);
+
+    console.log("hook done")
+}
+
+function start(libname, payload) {
+    const targetModule = Process.getModuleByName(libname);
+    let targetAddress = null;
+    if ("symbol" in payload) {
+        targetAddress = targetModule.findExportByName(payload.symbol);
+    } else if ("offset" in payload) {
+        targetAddress = targetModule.base.add(ptr(payload.offset));
+    }
+    traceAddr(targetAddress)
+}
 
 (() => {
 
@@ -222,17 +285,19 @@ function watcherLib(libname, callback) {
         console.log(JSON.stringify(payload))
         const libname = payload.libname;
         console.log(`libname:${libname}`)
-        if(payload.spawn) {
-            console.error(`todo: spawn inject not implemented`)
+        if (payload.spawn) {
+            // console.error(`todo: spawn inject not implemented`)
+            hook_dlopen(libname, payload)
         } else {
             // const modules = Process.enumerateModules();
             const targetModule = Process.getModuleByName(libname);
             let targetAddress = null;
-            if("symbol" in payload) {
+            if ("symbol" in payload) {
                 targetAddress = targetModule.findExportByName(payload.symbol);
-            } else if("offset" in payload) {
+            } else if ("offset" in payload) {
                 targetAddress = targetModule.base.add(ptr(payload.offset));
             }
+            myCode()
             traceAddr(targetAddress)
         }
     })
